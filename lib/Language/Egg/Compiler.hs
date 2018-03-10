@@ -124,11 +124,29 @@ compileEnv env (If v e1 e2 l)    = assertType env v TBoolean
     i1s                          = compileEnv env e1
     i2s                          = compileEnv env e2
 
-compileEnv env (Tuple es _)      = error "TBD:compileEnv:Tuple"
+compileEnv env (Tuple es _)      = [ IMov (Reg EAX) (Reg ESI)
+                                   , IAdd (Reg ESI) (Const (i*4))
+                                   , IMov (Reg EAX) (Const len)] ++
+                                     concatMap allocate (zip es [1,2..]) ++
+                                   [ IAdd (Reg EAX) (typeTag TTuple)]
+  where
+    len                          = length es
+    i                            = if even len then (len+2)
+                                   else (len+1)
+    allocate (e,n)               = [ IMov (Reg EBX) (immArg env e)
+                                   , IMov (pairAddr n) (Reg EBX)]
 
-compileEnv env (GetItem vE vI _) = error "TBD:compileEnv:GetItem"
+compileEnv env (GetItem vE vI _) = assertType env vE TTuple ++
+                                 [ IMov (Reg EAX) (immArg env vE)
+                                 , ISub (Reg EAX) (typeTag TTuple)
+                                 , IMov (Reg EAX) (pairAddr (i+1))]
+  where
+   Const i                       = immArg env vI 
 
 compileEnv env (App f vs _)      = call (Builtin f) (param env <$> vs)
+
+
+pairAddr n                      = Sized DWordPtr (RegOffset (4*n) EAX)
 
 compileImm :: Env -> IExp -> Instruction
 compileImm env v = IMov (Reg EAX) (immArg env v)
@@ -149,9 +167,19 @@ compileBind env (x, e) = (env', is)
 compilePrim1 :: Tag -> Env -> Prim1 -> IExp -> [Instruction]
 compilePrim1 l env Add1    v = compilePrim2 l env Plus  v (Number 1 l)
 compilePrim1 l env Sub1    v = compilePrim2 l env Minus v (Number 1 l)
-compilePrim1 l env IsNum   v = error "TBD:compilePrim1:isNum"
-compilePrim1 l env IsBool  v = error "TBD:compilePrim1:isBool"
-compilePrim1 l env IsTuple v = error "TBD:compilePrim1:isTuple"
+compilePrim1 l env IsNum   v = compileEnv env v ++
+                             [ IAnd (Reg EAX) (typeMask TNumber)
+                             , IShl (Reg EAX) (Const 31)
+                             , IOr  (Reg EAX) (typeTag TBoolean)
+                             , IXor (Reg EAX) (HexConst 0x80000000)]
+compilePrim1 l env IsBool  v = compileEnv env v ++
+                            [ IAnd (Reg EAX) (typeMask TBoolean)
+                            , IShl (Reg EAX) (Const 31)
+                            , IOr  (Reg EAX) (typeTag TBoolean)]
+compilePrim1 l env IsTuple v = compileEnv env v ++
+                            [ IAnd (Reg EAX) (typeMask TTuple)
+                            , IShl (Reg EAX) (Const 31)
+                            , IOr  (Reg EAX) (typeTag TBoolean)]
 compilePrim1 _ env Print   v = call (Builtin "print") [param env v]
 
 compilePrim2 :: Tag -> Env -> Prim2 -> IExp -> IExp -> [Instruction]
