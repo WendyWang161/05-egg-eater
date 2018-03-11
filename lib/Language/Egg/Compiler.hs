@@ -125,7 +125,9 @@ compileEnv env (If v e1 e2 l)    = assertType env v TBoolean
     i2s                          = compileEnv env e2
 
 compileEnv env (Tuple es _)      = [ IMov (Reg EAX) (Reg ESI)
-                                   , IAdd (Reg ESI) (Const (i*4))]
+                                   , IAdd (Reg ESI) (Const (i*4))
+                                   , IMov (Reg EBX) (Const len)
+                                   , IMov (Sized DWordPtr (RegOffset 0 EAX)) (Reg EBX)]                                
                                   ++ concatMap tupleCopy (zip es [0,1..]) ++
                                    [ IOr (Reg EAX) (typeTag TTuple)]
   where
@@ -133,24 +135,13 @@ compileEnv env (Tuple es _)      = [ IMov (Reg EAX) (Reg ESI)
     i                            = if even len then (len+2)
                                    else (len+1)
     tupleCopy (e,n)              = [ IMov (Reg EBX) (immArg env e)
-                                   , IMov (pairAddr n) (Reg EBX)]
+                                   , IMov (pairAddr (n+1)) (Reg EBX)]
                                    
-                                 {-[ IMov (Reg EAX) (Reg ESI)
-                                   , IAdd (Reg ESI) (Const (i*4))
-                                   , IMov (Reg EAX) (Const len)] ++
-                                     concatMap allocate (zip es [1,2..]) ++
-                                   [ IAdd (Reg EAX) (typeTag TTuple)]
-  where
-    len                          = length es
-    i                            = if even len then (len+2)
-                                   else (len+1)
-    allocate (e,n)               = [ IMov (Reg EBX) (immArg env e)
-                                   , IMov (pairAddr n) (Reg EBX)]-}
 
 compileEnv env (GetItem vE vI _) = assertType env vE TTuple ++
                                  [ IMov (Reg EAX) (immArg env vE)
                                  , ISub (Reg EAX) (typeTag TTuple)
-                                 , IMov (Reg EAX) (Sized DWordPtr (RegOffset (2*i) EAX))]
+                                 , IMov (Reg EAX) (Sized DWordPtr (RegOffset (2*(i+2)) EAX))]
   where
    Const i                       = immArg env vI 
 

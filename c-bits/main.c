@@ -99,11 +99,14 @@ void print_boolean(int val){
 }
 
 void print_tuple(int val){
-  int* valp = (int*) (val - 1);     
+  int* valp = (int*) (val - 1); 
+  int size = (*valp) ;          
   printf("(");
-  print_val(*valp);                 // print first element
-  printf(", ");
-  print_val(*(valp + 1));           // print second element
+  print_val(*(valp + 1));
+  for(int i = 2; i < size+1; i++){
+    printf(", ");
+    print_val(*(valp + i));
+  }       
   printf(")");
 
 }
